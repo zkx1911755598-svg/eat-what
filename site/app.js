@@ -38,7 +38,6 @@ const state = {
 };
 
 const el = {};
-let tencentMapPromise = null;
 
 function $(id) {
   return document.getElementById(id);
@@ -465,10 +464,10 @@ function locate() {
 
   navigator.geolocation.getCurrentPosition(
     (position) => {
-      state.currentPosition = {
-        lat: position.coords.latitude,
-        lng: position.coords.longitude
-      };
+      state.currentPosition = wgs84ToGcj02(
+        position.coords.latitude,
+        position.coords.longitude
+      );
       setLocText('已定位');
       refreshDistances();
       updateGeoNote();
@@ -515,45 +514,161 @@ function updateGeoNote() {
   el.geoNote.hidden = false;
 }
 
-function loadTencentMap() {
-  if (window.TMap && window.TMap.service) {
-    document.documentElement.dataset.tencentSdk = 'ok';
-    return Promise.resolve();
-  }
-  if (tencentMapPromise) return tencentMapPromise;
+function outOfChina(lat, lng) {
+  return lng < 72.004 || lng > 137.8347 || lat < 0.8293 || lat > 55.8271;
+}
 
-  const config = window.APP_CONFIG || {};
-  if (!config.tencentMapKey) {
-    document.documentElement.dataset.tencentSdk = 'missing';
-    return Promise.reject(new Error('TENCENT_KEY_MISSING'));
-  }
+function transformLat(x, y) {
+  let ret = -100.0 + 2.0 * x + 3.0 * y + 0.2 * y * y + 0.1 * x * y + 0.2 * Math.sqrt(Math.abs(x));
+  ret += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
+  ret += (20.0 * Math.sin(y * Math.PI) + 40.0 * Math.sin(y / 3.0 * Math.PI)) * 2.0 / 3.0;
+  ret += (160.0 * Math.sin(y / 12.0 * Math.PI) + 320 * Math.sin(y * Math.PI / 30.0)) * 2.0 / 3.0;
+  return ret;
+}
 
-  document.documentElement.dataset.tencentSdk = 'loading';
-  tencentMapPromise = new Promise((resolve, reject) => {
+function transformLng(x, y) {
+  let ret = 300.0 + x + 2.0 * y + 0.1 * x * x + 0.1 * x * y + 0.1 * Math.sqrt(Math.abs(x));
+  ret += (20.0 * Math.sin(6.0 * x * Math.PI) + 20.0 * Math.sin(2.0 * x * Math.PI)) * 2.0 / 3.0;
+  ret += (20.0 * Math.sin(x * Math.PI) + 40.0 * Math.sin(x / 3.0 * Math.PI)) * 2.0 / 3.0;
+  ret += (150.0 * Math.sin(x / 12.0 * Math.PI) + 300.0 * Math.sin(x / 30.0 * Math.PI)) * 2.0 / 3.0;
+  return ret;
+}
+
+function wgs84ToGcj02(lat, lng) {
+  if (outOfChina(lat, lng)) return { lat, lng };
+
+  const a = 6378245.0;
+  const ee = 0.00669342162296594323;
+  let dLat = transformLat(lng - 105.0, lat - 35.0);
+  let dLng = transformLng(lng - 105.0, lat - 35.0);
+  const radLat = (lat / 180.0) * Math.PI;
+  let magic = Math.sin(radLat);
+  magic = 1 - ee * magic * magic;
+  const sqrtMagic = Math.sqrt(magic);
+  dLat = (dLat * 180.0) / (((a * (1 - ee)) / (magic * sqrtMagic)) * Math.PI);
+  dLng = (dLng * 180.0) / ((a / sqrtMagic) * Math.cos(radLat) * Math.PI);
+
+  return { lat: lat + dLat, lng: lng + dLng };
+}
+
+function jsonpRequest(url, timeout) {
+  return new Promise((resolve, reject) => {
+    const callbackName = '__tmap_cb_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
     const script = document.createElement('script');
-    script.src = 'https://map.qq.com/api/gljs?v=1.exp&key='
-      + encodeURIComponent(config.tencentMapKey)
-      + '&libraries=service';
-    script.async = true;
-    script.onload = () => {
-      if (window.TMap && window.TMap.service) {
-        document.documentElement.dataset.tencentSdk = 'ok';
-        resolve();
-      } else {
-        document.documentElement.dataset.tencentSdk = 'error';
-        tencentMapPromise = null;
-        reject(new Error('TENCENT_LOAD_FAILED'));
+    let settled = false;
+    let timer = null;
+
+    function cleanup() {
+      if (timer) clearTimeout(timer);
+      if (script.parentNode) script.parentNode.removeChild(script);
+      try {
+        delete window[callbackName];
+      } catch (err) {
+        window[callbackName] = undefined;
       }
+    }
+
+    timer = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('腾讯地图请求超时'));
+    }, timeout || 10000);
+
+    window[callbackName] = (data) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve(data);
     };
+
     script.onerror = () => {
-      document.documentElement.dataset.tencentSdk = 'error';
-      tencentMapPromise = null;
-      reject(new Error('TENCENT_LOAD_FAILED'));
+      if (settled) return;
+      settled = true;
+      cleanup();
+      reject(new Error('腾讯地图请求失败'));
     };
+
+    script.src = url + (url.indexOf('?') > -1 ? '&' : '?')
+      + 'output=jsonp&callback=' + callbackName;
     document.head.appendChild(script);
   });
+}
 
-  return tencentMapPromise;
+function formatTencentError(res) {
+  const status = res && res.status;
+  if (status === 110 || status === 111 || status === 112) {
+    return '腾讯地图 Key 未授权当前域名，请检查域名白名单';
+  }
+  if (status === 120) return '腾讯地图今日搜索额度已用完';
+  return (res && res.message) || '腾讯地图搜索失败';
+}
+
+async function tencentSearch(keyword, center) {
+  const key = window.APP_CONFIG && window.APP_CONFIG.tencentMapKey;
+  if (!key) throw new Error('请先配置腾讯地图 Key');
+
+  const nearby = 'nearby(' + center.lat + ',' + center.lng + ',1000)';
+  const base = 'https://apis.map.qq.com/ws/place/v1/search'
+    + '?keyword=' + encodeURIComponent(keyword)
+    + '&boundary=' + encodeURIComponent(nearby)
+    + '&page_size=20'
+    + '&key=' + encodeURIComponent(key);
+
+  const res = await jsonpRequest(base);
+  if (!res || res.status !== 0) {
+    throw new Error(formatTencentError(res));
+  }
+
+  let data = res.data || [];
+
+  // 1 公里内没有结果时，反查城市，再按城市范围搜一次
+  if (!data.length) {
+    try {
+      const geoUrl = 'https://apis.map.qq.com/ws/geocoder/v1/'
+        + '?location=' + center.lat + ',' + center.lng
+        + '&key=' + encodeURIComponent(key);
+      const geo = await jsonpRequest(geoUrl);
+      const result = geo && geo.result;
+      const city = result && (
+        (result.ad_info && result.ad_info.city)
+        || (result.address_component && result.address_component.city)
+      );
+
+      if (city) {
+        const region = 'region(' + city + ',0)';
+        const regionUrl = 'https://apis.map.qq.com/ws/place/v1/search'
+          + '?keyword=' + encodeURIComponent(keyword)
+          + '&boundary=' + encodeURIComponent(region)
+          + '&page_size=20'
+          + '&key=' + encodeURIComponent(key);
+        const regionRes = await jsonpRequest(regionUrl);
+        if (regionRes && regionRes.status === 0) {
+          data = regionRes.data || [];
+        }
+      }
+    } catch (err) {
+      // 城市级兜底失败时保留空结果，让用户手动填写
+    }
+  }
+
+  return data.map((item) => {
+    const location = item.location || {};
+    const lat = Number(location.lat);
+    const lng = Number(location.lng);
+    return {
+      name: item.title || '未命名地点',
+      address: item.address || '',
+      lat,
+      lng,
+      distance: lat && lng ? haversine(center, { lat, lng }) : null
+    };
+  }).filter((item) => item.name && item.lat && item.lng)
+    .sort((a, b) => {
+      const left = a.distance == null ? Infinity : a.distance;
+      const right = b.distance == null ? Infinity : b.distance;
+      return left - right;
+    });
 }
 
 async function searchPlaces() {
@@ -581,39 +696,14 @@ async function searchPlaces() {
   el.placeResults.innerHTML = '<div class="hint">正在搜索附近地点…</div>';
 
   try {
-    await loadTencentMap();
-    const search = new TMap.service.Search({ pageSize: 20 });
-    const center = new TMap.LatLng(state.currentPosition.lat, state.currentPosition.lng);
-    const result = await search.searchNearby({
-      keyword,
-      center,
-      radius: 1000,
-      autoExtend: true,
-      orderby: '_distance'
-    });
-
-    const data = (result && result.data) || [];
-    state.searchResults = data.map((item) => {
-      const location = item.location || {};
-      const lat = Number(location.lat);
-      const lng = Number(location.lng);
-      let distance = Number(item._distance);
-      if (!distance && lat && lng) {
-        distance = haversine(state.currentPosition, { lat, lng });
-      }
-      return {
-        name: item.title || item.name || '未命名地点',
-        address: item.address || '',
-        lat,
-        lng,
-        distance
-      };
-    }).filter((item) => item.name && item.lat && item.lng);
-
+    const data = await tencentSearch(keyword, state.currentPosition);
+    state.searchResults = data;
     renderSearchResults();
   } catch (err) {
     state.searchResults = [];
-    el.placeResults.innerHTML = '<div class="hint">腾讯地图搜索失败，请检查 Key、域名白名单和定位权限，或手动填写下方信息。</div>';
+    const message = err && err.message ? err.message : '腾讯地图搜索失败';
+    el.placeResults.innerHTML = '<div class="hint">'
+      + escapeHtml(message) + '，或手动填写下方信息。</div>';
   } finally {
     el.placeSearchBtn.disabled = false;
     el.placeSearchBtn.textContent = '搜索';
@@ -945,28 +1035,14 @@ function init() {
   loadState();
   bindEvents();
 
-  if (window.APP_CONFIG && window.APP_CONFIG.tencentMapKey) {
-    loadTencentMap().catch(() => {});
-  }
-
   const params = new URLSearchParams(window.location.search);
   if (params.get('demo') === '1' && !state.shops.length) {
     loadDemoData();
   }
 
   if (params.get('testSearch') === '1' && window.APP_CONFIG.tencentMapKey) {
-    loadTencentMap().then(() => {
-      const search = new TMap.service.Search({ pageSize: 5 });
-      const center = new TMap.LatLng(22.5405, 113.9545);
-      return search.searchNearby({
-        keyword: '牛肉面',
-        center,
-        radius: 1000,
-        autoExtend: true
-      });
-    }).then((res) => {
-      const count = res && res.data ? res.data.length : 0;
-      document.documentElement.dataset.tencentSearch = 'ok:' + count;
+    tencentSearch('牛肉面', { lat: 22.5405, lng: 113.9545 }).then((data) => {
+      document.documentElement.dataset.tencentSearch = 'ok:' + data.length;
     }).catch((err) => {
       document.documentElement.dataset.tencentSearch = 'error:'
         + (err && err.message ? err.message : 'unknown');
