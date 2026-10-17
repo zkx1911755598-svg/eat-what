@@ -954,6 +954,25 @@ function init() {
     loadDemoData();
   }
 
+  if (params.get('testSearch') === '1' && window.APP_CONFIG.tencentMapKey) {
+    loadTencentMap().then(() => {
+      const search = new TMap.service.Search({ pageSize: 5 });
+      const center = new TMap.LatLng(22.5405, 113.9545);
+      return search.searchNearby({
+        keyword: '牛肉面',
+        center,
+        radius: 1000,
+        autoExtend: true
+      });
+    }).then((res) => {
+      const count = res && res.data ? res.data.length : 0;
+      document.documentElement.dataset.tencentSearch = 'ok:' + count;
+    }).catch((err) => {
+      document.documentElement.dataset.tencentSearch = 'error:'
+        + (err && err.message ? err.message : 'unknown');
+    });
+  }
+
   renderList();
   updateDrawSub();
   renderHistory();
