@@ -27,6 +27,7 @@ const state = {
   category: 'food',
   addType: 'food',
   filter: 'all',
+  expandedShopId: null,
   currentPosition: null,
   pendingLocation: null,
   searchResults: [],
@@ -98,6 +99,17 @@ function haversine(from, to) {
   return Math.round(2 * radius * Math.asin(Math.sqrt(a)));
 }
 
+function parseDishes(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean).slice(0, 12);
+  }
+  return String(value || '')
+    .split(/[,，、;；\n]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .slice(0, 12);
+}
+
 function normalizeShop(shop) {
   const location = shop.location || {};
   return {
@@ -110,6 +122,7 @@ function normalizeShop(shop) {
     distance: shop.distance == null ? null : Number(shop.distance),
     rating: shop.rating == null ? null : Number(shop.rating),
     tags: Array.isArray(shop.tags) ? shop.tags.filter(Boolean).map(String) : [],
+    dishes: parseDishes(shop.dishes),
     note: String(shop.note || ''),
     pinned: !!shop.pinned,
     lastEatenAt: shop.lastEatenAt || null,
@@ -293,6 +306,9 @@ function renderResult(shop) {
   const tags = (shop.tags || [])
     .map((tag) => '<span class="tag">' + escapeHtml(tag) + '</span>')
     .join('');
+  const dishes = (shop.dishes || [])
+    .map((dish) => '<span class="dish-chip">' + escapeHtml(dish) + '</span>')
+    .join('');
   const note = shop.note
     ? '<div class="r-note">备注：' + escapeHtml(shop.note) + '</div>'
     : '';
@@ -310,6 +326,7 @@ function renderResult(shop) {
       </div>
       <div class="r-tags">${tags}</div>
       <div class="r-addr">${escapeHtml(shop.address || '')}${shop.lat != null && shop.lng != null ? ' <button class="nav-link" data-result-action="navigate" type="button">导航</button>' : ''}</div>
+      ${dishes ? '<div class="r-dishes"><span class="r-dish-label">招牌菜</span>' + dishes + '</div>' : ''}
       ${note}
       <div class="r-btns">
         <button class="btn primary" data-result-action="picked" type="button">就它了 ${CHECK_SVG}</button>
@@ -349,9 +366,16 @@ function shopCardHtml(shop) {
     .join('');
   const rating = shop.rating == null ? '—' : shop.rating;
   const distance = distanceText(shop.distance);
+  const expanded = state.expandedShopId === shop.id;
+  const dishes = (shop.dishes || [])
+    .map((dish) => '<span class="dish-chip">' + escapeHtml(dish) + '</span>')
+    .join('');
+  const preview = shop.dishes && shop.dishes.length
+    ? '招牌：' + shop.dishes.slice(0, 3).map((dish) => escapeHtml(dish)).join('、')
+    : '点击展开店铺详情';
 
   return `
-    <article class="shop-card">
+    <article class="shop-card ${expanded ? 'expanded' : ''}" data-shop-id="${escapeHtml(shop.id)}">
       <div class="shop-head">
         <div class="shop-name-wrap">
           ${shop.pinned ? PIN_SVG : ''}
@@ -360,18 +384,27 @@ function shopCardHtml(shop) {
         <div class="shop-right">
           <span class="shop-dist">${distance}</span>
           <span class="mini-badge ${shop.type}">${shop.type === 'food' ? '吃' : '饮'}</span>
+          <span class="shop-chevron">›</span>
         </div>
       </div>
-      <div class="shop-addr">${escapeHtml(shop.address || '')}</div>
-      <div class="shop-meta">
-        <span class="shop-stars">${stars(shop.rating)}</span>
-        <span class="num">${rating}</span>
-        ${tags}
-      </div>
-      <div class="shop-actions">
-        ${shop.lat != null && shop.lng != null ? '<button class="action" data-action="navigate" data-id="' + escapeHtml(shop.id) + '" type="button">导航</button>' : ''}
-        <button class="action" data-action="pin" data-id="${escapeHtml(shop.id)}" type="button">${shop.pinned ? '取消置顶' : '置顶'}</button>
-        <button class="action danger" data-action="delete" data-id="${escapeHtml(shop.id)}" type="button">删除</button>
+      <div class="shop-preview">${preview}</div>
+      <div class="shop-detail" ${expanded ? '' : 'hidden'}>
+        <div class="shop-addr">${escapeHtml(shop.address || '')}</div>
+        <div class="shop-meta">
+          <span class="shop-stars">${stars(shop.rating)}</span>
+          <span class="num">${rating}</span>
+          ${tags}
+        </div>
+        ${dishes
+          ? '<div class="dish-block"><div class="dish-title">招牌菜 / 推荐菜</div><div class="dish-row">' + dishes + '</div></div>'
+          : '<div class="dish-empty">还没有记录招牌菜，点下方“编辑招牌菜”补充</div>'}
+        ${shop.note ? '<div class="shop-note">备注：' + escapeHtml(shop.note) + '</div>' : ''}
+        <div class="shop-actions">
+          ${shop.lat != null && shop.lng != null ? '<button class="action" data-action="navigate" data-id="' + escapeHtml(shop.id) + '" type="button">导航</button>' : ''}
+          <button class="action" data-action="edit-dishes" data-id="${escapeHtml(shop.id)}" type="button">编辑招牌菜</button>
+          <button class="action" data-action="pin" data-id="${escapeHtml(shop.id)}" type="button">${shop.pinned ? '取消置顶' : '置顶'}</button>
+          <button class="action danger" data-action="delete" data-id="${escapeHtml(shop.id)}" type="button">删除</button>
+        </div>
       </div>
     </article>
   `;
@@ -406,12 +439,29 @@ function togglePin(id) {
   renderList();
 }
 
+function editDishes(id) {
+  const shop = state.shops.find((item) => item.id === id);
+  if (!shop) return;
+
+  const input = window.prompt(
+    '输入招牌菜 / 推荐菜，用逗号分隔',
+    (shop.dishes || []).join('、')
+  );
+  if (input == null) return;
+
+  shop.dishes = parseDishes(input);
+  saveShops();
+  renderList();
+  showToast(shop.dishes.length ? '招牌菜已更新' : '已清空招牌菜');
+}
+
 function deleteShop(id) {
   const shop = state.shops.find((item) => item.id === id);
   if (!shop) return;
   if (!window.confirm('确定删除「' + shop.name + '」吗？')) return;
 
   state.shops = state.shops.filter((item) => item.id !== id);
+  if (state.expandedShopId === id) state.expandedShopId = null;
   if (state.result && state.result.id === id) {
     state.result = null;
     el.resultCard.innerHTML = '';
@@ -775,6 +825,7 @@ function resetAddForm() {
   el.shopName.value = '';
   el.shopAddress.value = '';
   el.shopRating.value = '';
+  el.shopDishes.value = '';
   el.placeResults.innerHTML = '';
   state.searchResults = [];
   state.pendingLocation = null;
@@ -802,7 +853,7 @@ function addShop() {
     ? haversine(state.currentPosition, pending)
     : null;
 
-  state.shops.push(normalizeShop({
+  const newShop = normalizeShop({
     id: uid(),
     name,
     type: state.addType,
@@ -812,11 +863,15 @@ function addShop() {
     distance,
     rating,
     tags: Array.from(state.selectedTags),
+    dishes: parseDishes(el.shopDishes.value),
     note: '',
     pinned: false,
     lastEatenAt: null,
     createdAt: Date.now()
-  }));
+  });
+
+  state.shops.push(newShop);
+  state.expandedShopId = newShop.id;
 
   saveShops();
   resetAddForm();
@@ -879,16 +934,16 @@ async function importData(file) {
 
 function loadDemoData(force) {
   const demos = [
-    { name: '老王牛肉面', type: 'food', address: '科技园南路 12 号', rating: 4.6, tags: ['面食', '常去'], lastDays: 5 },
-    { name: '蜀香火锅', type: 'food', address: '海岸城 3 层 305', rating: 4.8, tags: ['火锅', '聚餐'], lastDays: 2 },
-    { name: '轻食沙拉', type: 'food', address: '软件产业基地 2 栋', rating: 4.3, tags: ['轻食', '健康'], lastDays: null },
-    { name: '日式烧肉', type: 'food', address: '万象天地 B1', rating: 4.7, tags: ['烧肉', '约会'], lastDays: null },
-    { name: '兰州拉面', type: 'food', address: '科苑北路 11 号', rating: 4.2, tags: ['面食', '平价'], lastDays: null },
-    { name: '一点点', type: 'drink', address: '科苑路 8 号', rating: 4.5, tags: ['奶茶', '外卖'], lastDays: 6 },
-    { name: '喜茶', type: 'drink', address: '海岸城 1 层', rating: 4.7, tags: ['奶茶', '招牌'], lastDays: 1 },
-    { name: '瑞幸咖啡', type: 'drink', address: '软件产业基地 1 栋', rating: 4.4, tags: ['咖啡', '提神'], lastDays: null },
-    { name: '椰子冰沙', type: 'drink', address: '深大西门', rating: 4.2, tags: ['甜品', '清爽'], lastDays: null },
-    { name: '蜜雪冰城', type: 'drink', address: '科苑南路 3 号', rating: 4.1, tags: ['奶茶', '平价'], lastDays: null }
+    { name: '老王牛肉面', type: 'food', address: '科技园南路 12 号', rating: 4.6, tags: ['面食', '常去'], dishes: ['牛肉面', '凉拌黄瓜'], lastDays: 5 },
+    { name: '蜀香火锅', type: 'food', address: '海岸城 3 层 305', rating: 4.8, tags: ['火锅', '聚餐'], dishes: ['毛肚', '肥牛', '虾滑'], lastDays: 2 },
+    { name: '轻食沙拉', type: 'food', address: '软件产业基地 2 栋', rating: 4.3, tags: ['轻食', '健康'], dishes: ['鸡胸沙拉', '牛油果沙拉'], lastDays: null },
+    { name: '日式烧肉', type: 'food', address: '万象天地 B1', rating: 4.7, tags: ['烧肉', '约会'], dishes: ['牛舌', '横膈膜'], lastDays: null },
+    { name: '兰州拉面', type: 'food', address: '科苑北路 11 号', rating: 4.2, tags: ['面食', '平价'], dishes: ['牛肉拉面', '小菜'], lastDays: null },
+    { name: '一点点', type: 'drink', address: '科苑路 8 号', rating: 4.5, tags: ['奶茶', '外卖'], dishes: ['波霸奶茶', '四季春'], lastDays: 6 },
+    { name: '喜茶', type: 'drink', address: '海岸城 1 层', rating: 4.7, tags: ['奶茶', '招牌'], dishes: ['多肉葡萄', '芝芝莓莓'], lastDays: 1 },
+    { name: '瑞幸咖啡', type: 'drink', address: '软件产业基地 1 栋', rating: 4.4, tags: ['咖啡', '提神'], dishes: ['生椰拿铁', '美式'], lastDays: null },
+    { name: '椰子冰沙', type: 'drink', address: '深大西门', rating: 4.2, tags: ['甜品', '清爽'], dishes: ['椰子冰沙', '芒果冰'], lastDays: null },
+    { name: '蜜雪冰城', type: 'drink', address: '科苑南路 3 号', rating: 4.1, tags: ['奶茶', '平价'], dishes: ['冰鲜柠檬水', '圣代'], lastDays: null }
   ];
 
   if (!force && state.shops.length && !window.confirm('已有收藏，继续会追加示例数据，确定吗？')) return;
@@ -905,6 +960,7 @@ function loadDemoData(force) {
       address: demo.address,
       rating: demo.rating,
       tags: demo.tags,
+      dishes: demo.dishes,
       lastEatenAt: demo.lastDays == null ? null : Date.now() - demo.lastDays * 86400000,
       createdAt: Date.now() - Math.random() * 100000
     }));
@@ -1002,19 +1058,30 @@ function bindEvents() {
 
   el.shopList.addEventListener('click', (event) => {
     const button = event.target.closest('[data-action]');
-    if (!button) return;
-    if (button.dataset.action === 'pin') togglePin(button.dataset.id);
-    if (button.dataset.action === 'delete') deleteShop(button.dataset.id);
-    if (button.dataset.action === 'navigate') {
-      const shop = state.shops.find((item) => item.id === button.dataset.id);
-      if (shop) {
-        openTencentNavigation(
-          { lat: shop.lat, lng: shop.lng },
-          shop.name,
-          shop.address
-        );
+    if (button) {
+      if (button.dataset.action === 'pin') togglePin(button.dataset.id);
+      if (button.dataset.action === 'delete') deleteShop(button.dataset.id);
+      if (button.dataset.action === 'edit-dishes') editDishes(button.dataset.id);
+      if (button.dataset.action === 'navigate') {
+        const shop = state.shops.find((item) => item.id === button.dataset.id);
+        if (shop) {
+          openTencentNavigation(
+            { lat: shop.lat, lng: shop.lng },
+            shop.name,
+            shop.address
+          );
+        }
       }
+      return;
     }
+
+    const card = event.target.closest('.shop-card');
+    if (!card) return;
+    if (!event.target.closest('.shop-head') && !event.target.closest('.shop-preview')) return;
+
+    const id = card.dataset.shopId;
+    state.expandedShopId = state.expandedShopId === id ? null : id;
+    renderList();
   });
 
   el.setAvoid.addEventListener('change', () => {
@@ -1065,6 +1132,7 @@ function init() {
   el.shopName = $('shopName');
   el.shopAddress = $('shopAddress');
   el.shopRating = $('shopRating');
+  el.shopDishes = $('shopDishes');
   el.geoNote = $('geoNote');
   el.geoNoteText = $('geoNoteText');
   el.navigateBtn = $('navigateBtn');

@@ -318,6 +318,19 @@ button {
   line-height: 1.5;
 }
 
+.r-dishes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 12px;
+}
+
+.r-dish-label {
+  color: var(--sub);
+  font-size: 12px;
+}
+
 .r-note {
   margin-top: 12px;
   padding: 9px 12px;
@@ -424,6 +437,7 @@ button {
   border-radius: 18px;
   background: #fff;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.045);
+  cursor: pointer;
 }
 
 .shop-head {
@@ -467,6 +481,31 @@ button {
   font-size: 12px;
 }
 
+.shop-chevron {
+  margin-left: 8px;
+  color: #c7c7cc;
+  font-size: 18px;
+  line-height: 1;
+  transition: transform 0.2s;
+}
+
+.shop-card.expanded .shop-chevron {
+  transform: rotate(90deg);
+}
+
+.shop-preview {
+  margin-top: 6px;
+  color: var(--sub);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.shop-detail {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
 .mini-badge {
   padding: 3px 8px;
   border-radius: 6px;
@@ -508,6 +547,47 @@ button {
   font-size: 12px;
 }
 
+.dish-block {
+  margin-top: 12px;
+}
+
+.dish-title {
+  margin-bottom: 7px;
+  color: var(--sub);
+  font-size: 12px;
+}
+
+.dish-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.dish-chip {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: #fff7e6;
+  color: #a16207;
+  font-size: 12px;
+}
+
+.dish-empty {
+  margin-top: 10px;
+  color: var(--sub);
+  font-size: 12px;
+}
+
+.shop-note {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: #fff8e6;
+  color: #8a6d1d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
 .tag {
   display: inline-block;
   padding: 5px 10px;
@@ -519,9 +599,10 @@ button {
 
 .shop-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 18px;
-  margin-top: 12px;
+  gap: 12px 16px;
+  margin-top: 14px;
 }
 
 .action {
