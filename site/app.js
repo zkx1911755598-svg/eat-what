@@ -655,11 +655,9 @@ function openTencentNavigation(location, name, address) {
     return;
   }
 
-  const to = 'coord:' + location.lat + ',' + location.lng
-    + ';name:' + encodeURIComponent(name || '目的地')
-    + ';addr:' + encodeURIComponent(address || '');
   const url = 'https://apis.map.qq.com/uri/v1/routeplan?type=drive'
-    + '&to=' + to
+    + '&to=' + encodeURIComponent(name || '目的地')
+    + '&tocoord=' + location.lat + ',' + location.lng
     + '&referer=eat-what';
   const win = window.open(url, '_blank', 'noopener');
   if (!win) window.location.href = url;
