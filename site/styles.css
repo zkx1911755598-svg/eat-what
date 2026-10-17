@@ -667,6 +667,34 @@ button {
   text-decoration: underline;
 }
 
+.geo-note #geoNoteText {
+  flex: 1;
+  min-width: 0;
+}
+
+.geo-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.geo-actions #navigateBtn {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.nav-link {
+  border: none;
+  background: none;
+  padding: 0;
+  margin-left: 6px;
+  color: var(--accent);
+  font-size: 13px;
+  text-decoration: underline;
+}
+
 .tag-panel {
   margin-top: 16px;
 }

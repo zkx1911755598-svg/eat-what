@@ -309,7 +309,7 @@ function renderResult(shop) {
         <span class="num">${shop.rating == null ? '—' : shop.rating}</span>
       </div>
       <div class="r-tags">${tags}</div>
-      <div class="r-addr">${escapeHtml(shop.address || '')}</div>
+      <div class="r-addr">${escapeHtml(shop.address || '')}${shop.lat != null && shop.lng != null ? ' <button class="nav-link" data-result-action="navigate" type="button">导航</button>' : ''}</div>
       ${note}
       <div class="r-btns">
         <button class="btn primary" data-result-action="picked" type="button">就它了 ${CHECK_SVG}</button>
@@ -369,6 +369,7 @@ function shopCardHtml(shop) {
         ${tags}
       </div>
       <div class="shop-actions">
+        ${shop.lat != null && shop.lng != null ? '<button class="action" data-action="navigate" data-id="' + escapeHtml(shop.id) + '" type="button">导航</button>' : ''}
         <button class="action" data-action="pin" data-id="${escapeHtml(shop.id)}" type="button">${shop.pinned ? '取消置顶' : '置顶'}</button>
         <button class="action danger" data-action="delete" data-id="${escapeHtml(shop.id)}" type="button">删除</button>
       </div>
@@ -512,6 +513,35 @@ function updateGeoNote() {
 
   el.geoNoteText.textContent = text;
   el.geoNote.hidden = false;
+}
+
+function openTencentNavigation(location, name, address) {
+  if (!location || location.lat == null || location.lng == null) {
+    showToast('这个地点没有坐标，暂时无法导航');
+    return;
+  }
+
+  const to = 'coord:' + location.lat + ',' + location.lng
+    + ';name:' + encodeURIComponent(name || '目的地')
+    + ';addr:' + encodeURIComponent(address || '');
+  const url = 'https://apis.map.qq.com/uri/v1/routeplan?type=drive'
+    + '&to=' + to
+    + '&referer=eat-what';
+  const win = window.open(url, '_blank', 'noopener');
+  if (!win) window.location.href = url;
+}
+
+function navigateToSelected() {
+  if (!state.pendingLocation) {
+    showToast('请先选择地点');
+    return;
+  }
+
+  openTencentNavigation(
+    state.pendingLocation,
+    el.shopName.value.trim() || '目的地',
+    el.shopAddress.value.trim()
+  );
 }
 
 function outOfChina(lat, lng) {
@@ -961,6 +991,13 @@ function bindEvents() {
     if (!button) return;
     if (button.dataset.resultAction === 'again') startDraw();
     if (button.dataset.resultAction === 'picked') pickedCurrent();
+    if (button.dataset.resultAction === 'navigate' && state.result) {
+      openTencentNavigation(
+        { lat: state.result.lat, lng: state.result.lng },
+        state.result.name,
+        state.result.address
+      );
+    }
   });
 
   el.shopList.addEventListener('click', (event) => {
@@ -968,6 +1005,16 @@ function bindEvents() {
     if (!button) return;
     if (button.dataset.action === 'pin') togglePin(button.dataset.id);
     if (button.dataset.action === 'delete') deleteShop(button.dataset.id);
+    if (button.dataset.action === 'navigate') {
+      const shop = state.shops.find((item) => item.id === button.dataset.id);
+      if (shop) {
+        openTencentNavigation(
+          { lat: shop.lat, lng: shop.lng },
+          shop.name,
+          shop.address
+        );
+      }
+    }
   });
 
   el.setAvoid.addEventListener('change', () => {
@@ -994,6 +1041,8 @@ function bindEvents() {
     state.pendingLocation = null;
     el.geoNote.hidden = true;
   });
+
+  el.navigateBtn.addEventListener('click', navigateToSelected);
 }
 
 function init() {
@@ -1018,6 +1067,7 @@ function init() {
   el.shopRating = $('shopRating');
   el.geoNote = $('geoNote');
   el.geoNoteText = $('geoNoteText');
+  el.navigateBtn = $('navigateBtn');
   el.clearGeoBtn = $('clearGeoBtn');
   el.tagRow = $('tagRow');
   el.addShopBtn = $('addShopBtn');
