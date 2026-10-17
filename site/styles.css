@@ -6,7 +6,7 @@
   --line: #e8e8ed;
   --green: #34c759;
   --amber: #f5a623;
-  --eat: #e82127;
+  --eat: #0f766e;
   --drink: #0071e3;
 }
 
@@ -197,7 +197,7 @@ button {
   border: none;
   border-radius: 50%;
   background: var(--accent);
-  background: conic-gradient(from 0deg, #e82127, #ffc9cb, #e82127);
+  background: conic-gradient(from 0deg, #0f766e, #99f6e4, #0f766e);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
 }
 
@@ -614,7 +614,7 @@ button {
 }
 
 .action.danger {
-  color: #ff3b30;
+  color: #8a6d1d;
 }
 
 .search-row {
@@ -902,7 +902,7 @@ button {
 }
 
 .cell-btn.danger {
-  color: #ff3b30;
+  color: #8a6d1d;
 }
 
 .chevron {
@@ -1012,10 +1012,10 @@ body {
   position: relative;
   overflow-x: hidden;
   background:
-    radial-gradient(900px 620px at 8% -10%, rgba(255, 214, 196, 0.9) 0%, transparent 62%),
-    radial-gradient(760px 620px at 100% 8%, rgba(196, 224, 255, 0.9) 0%, transparent 60%),
+    radial-gradient(900px 620px at 8% -10%, rgba(214, 236, 255, 0.9) 0%, transparent 62%),
+    radial-gradient(760px 620px at 100% 8%, rgba(226, 220, 255, 0.9) 0%, transparent 60%),
     radial-gradient(800px 700px at 55% 108%, rgba(205, 243, 226, 0.9) 0%, transparent 58%),
-    linear-gradient(160deg, #f4f5f9 0%, #f8f3ef 48%, #eff7f4 100%);
+    linear-gradient(160deg, #f4f5f9 0%, #f3f5fa 48%, #eff7f4 100%);
   background-attachment: fixed;
 }
 
@@ -1036,7 +1036,7 @@ body::before {
   left: -90px;
   width: 360px;
   height: 360px;
-  background: radial-gradient(circle, rgba(255, 167, 145, 0.85), transparent 68%);
+  background: radial-gradient(circle, rgba(167, 243, 208, 0.8), transparent 68%);
   animation: liquidFloatA 18s ease-in-out infinite alternate;
 }
 
