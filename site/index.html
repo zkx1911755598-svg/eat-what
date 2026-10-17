@@ -3,15 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#f5f5f7">
+  <meta name="theme-color" content="#fbf7ef">
   <meta name="description" content="收藏喜欢的店，吃饭或饮品随机抽签。">
   <title>今天吃什么 · 美食抽签</title>
-  <link rel="stylesheet" href="styles.css?v=glass-orb">
+  <link rel="stylesheet" href="styles.css?v=apple-deck">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
   <div class="app">
-    <section class="screen active" id="screen-draw">
+    <main class="stage" id="screen-draw">
       <header class="page-head">
         <h1>抽签</h1>
         <button class="loc-pill" id="locBtn" type="button">
@@ -32,17 +32,31 @@
       <h2 class="draw-title" id="drawTitle">今天吃什么？</h2>
       <p class="draw-sub" id="drawSub">从 0 家「吃饭」中综合抽取</p>
 
-      <button class="wheel" id="wheel" type="button" aria-label="开始抽签">
-        <span class="wheel-inner">
-          <svg class="wheel-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <button class="deck" id="deck" type="button" aria-label="开始抽签">
+        <span class="deck-card back-2">
+          <span class="deck-back-label">收藏</span>
+          <span class="deck-back-name" id="deckBack2">等你添加</span>
+        </span>
+        <span class="deck-card back-1">
+          <span class="deck-back-label">收藏</span>
+          <span class="deck-back-name" id="deckBack1">还没有收藏</span>
+        </span>
+        <span class="deck-card top">
+          <span class="deck-top-row">
+            <span class="deck-badge" id="deckBadge">吃饭</span>
+            <span class="deck-dots">•••</span>
+          </span>
+          <svg class="deck-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <rect x="3.8" y="3.8" width="16.4" height="16.4" rx="4.2"/>
             <circle cx="8.3" cy="8.3" r="1.05" fill="currentColor" stroke="none"/>
             <circle cx="12" cy="12" r="1.05" fill="currentColor" stroke="none"/>
             <circle cx="15.7" cy="15.7" r="1.05" fill="currentColor" stroke="none"/>
           </svg>
-          <small>开始抽签</small>
+          <span class="deck-title">点一下<br>帮你决定</span>
+          <span class="deck-hint" id="deckHint">从收藏里抽一张</span>
         </span>
       </button>
+
       <div class="ticker" id="ticker"></div>
       <div id="resultCard"></div>
 
@@ -51,181 +65,208 @@
         <span>先添加几家喜欢的店，再来抽签</span>
         <button class="btn primary" data-go="add" type="button">去添加</button>
       </div>
-    </section>
+    </main>
 
-    <section class="screen" id="screen-list">
-      <header class="page-head">
-        <h1>收藏</h1>
-        <span class="count-pill" id="shopCount">0 家</span>
-      </header>
-
-      <div class="filter-row" id="filterRow">
-        <button class="filter active" data-filter="all" type="button">全部</button>
-        <button class="filter" data-filter="food" type="button">吃饭</button>
-        <button class="filter" data-filter="drink" type="button">饮品</button>
-      </div>
-
-      <div id="shopList"></div>
-
-      <div class="empty" id="listEmpty" hidden>
-        <strong>这里还是空的</strong>
-        <span>去添加一家喜欢的店吧</span>
-        <button class="btn primary" data-go="add" type="button">去添加</button>
-      </div>
-    </section>
-
-    <section class="screen" id="screen-add">
-      <header class="page-head">
-        <h1>添加</h1>
-        <button class="loc-pill" id="addLocBtn" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z"/>
-            <circle cx="12" cy="10" r="2.5"/>
-          </svg>
-          <span id="addLocText">定位中…</span>
-        </button>
-      </header>
-
-      <div class="seg" id="typeSeg">
-        <div class="seg-thumb"></div>
-        <button class="seg-item active" data-type="food" type="button">吃饭</button>
-        <button class="seg-item" data-type="drink" type="button">饮品</button>
-      </div>
-
-      <div class="search-row">
-        <input id="placeSearch" type="search" placeholder="输入店名或关键词，如：牛肉面" autocomplete="off" enterkeyhint="search">
-        <button class="search-btn" id="placeSearchBtn" type="button">搜索</button>
-      </div>
-      <p class="hint">地点搜索由腾讯地图提供，需要允许定位；搜不到也可以在下方手动填写。</p>
-      <div id="placeResults"></div>
-
-      <div class="form-card">
-        <div class="form-title">店铺信息</div>
-        <input id="shopName" type="text" placeholder="店名（必填）" autocomplete="off">
-        <input id="shopAddress" type="text" placeholder="地址（可选）" autocomplete="off">
-        <input id="shopRating" type="number" min="0" max="5" step="0.1" placeholder="评分（可选，0-5）">
-        <input id="shopDishes" type="text" placeholder="招牌菜 / 推荐菜，用逗号分隔（可选）" autocomplete="off">
-        <div class="geo-note" id="geoNote" hidden>
-          <span id="geoNoteText"></span>
-          <span class="geo-actions">
-            <button id="navigateBtn" type="button">导航到这里</button>
-            <button id="clearGeoBtn" type="button">清除</button>
-          </span>
-        </div>
-      </div>
-
-      <div class="tag-panel">
-        <div class="tag-title">加标签（可选）</div>
-        <div class="tag-row" id="tagRow">
-          <button class="tag-chip" data-tag="常去" type="button">常去</button>
-          <button class="tag-chip" data-tag="招牌" type="button">招牌</button>
-          <button class="tag-chip" data-tag="辣" type="button">辣</button>
-          <button class="tag-chip" data-tag="清淡" type="button">清淡</button>
-          <button class="tag-chip" data-tag="性价比" type="button">性价比</button>
-          <button class="tag-chip" data-tag="适合约会" type="button">适合约会</button>
-        </div>
-      </div>
-
-      <button class="btn primary wide" id="addShopBtn" type="button">添加到收藏</button>
-    </section>
-
-    <section class="screen" id="screen-me">
-      <header class="page-head"><h1>我的</h1></header>
-
-      <div class="section-label">数据</div>
-      <div class="cell">
-        <div class="cell-main">
-          <div class="cell-title">本机存储</div>
-          <div class="cell-sub">数据保存在当前浏览器，换设备请用导出 / 导入</div>
-        </div>
-        <span class="status-dot" aria-label="正常"></span>
-      </div>
-
-      <div class="section-label">抽签规则</div>
-      <label class="cell">
-        <div class="cell-main">
-          <div class="cell-title">避免最近吃过</div>
-          <div class="cell-sub">最近 7 天内吃过的自动排除</div>
-        </div>
-        <span class="switch">
-          <input type="checkbox" id="setAvoid" checked>
-          <span></span>
-        </span>
-      </label>
-      <label class="cell">
-        <div class="cell-main">
-          <div class="cell-title">标签加权</div>
-          <div class="cell-sub">「常去 / 招牌」等偏好标签提高概率</div>
-        </div>
-        <span class="switch">
-          <input type="checkbox" id="setTag" checked>
-          <span></span>
-        </span>
-      </label>
-      <label class="cell">
-        <div class="cell-main">
-          <div class="cell-title">好评优先</div>
-          <div class="cell-sub">评分越高，抽中概率越大</div>
-        </div>
-        <span class="switch">
-          <input type="checkbox" id="setRating" checked>
-          <span></span>
-        </span>
-      </label>
-
-      <div class="section-label">历史</div>
-      <div id="historyList"></div>
-
-      <div class="section-label">更多</div>
-      <button class="cell cell-btn" id="exportBtn" type="button">
-        <span>导出数据</span><span class="chevron">›</span>
-      </button>
-      <button class="cell cell-btn" id="importBtn" type="button">
-        <span>导入数据</span><span class="chevron">›</span>
-      </button>
-      <input type="file" id="importFile" accept="application/json,.json" hidden>
-      <button class="cell cell-btn" id="demoBtn" type="button">
-        <span>载入示例数据</span><span class="chevron">›</span>
-      </button>
-      <button class="cell cell-btn danger" id="clearBtn" type="button">
-        <span>清空所有数据</span><span class="chevron">›</span>
-      </button>
-    </section>
-
-    <nav class="tabbar" aria-label="底部导航">
-      <button class="tab active" data-tab="draw" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="3.8" y="3.8" width="16.4" height="16.4" rx="4.2"/>
-          <circle cx="8.3" cy="8.3" r="1.05" fill="currentColor" stroke="none"/>
-          <circle cx="12" cy="12" r="1.05" fill="currentColor" stroke="none"/>
-          <circle cx="15.7" cy="15.7" r="1.05" fill="currentColor" stroke="none"/>
-        </svg>
-        <span>抽签</span>
-      </button>
-      <button class="tab" data-tab="list" type="button">
+    <nav class="dock" aria-label="快捷入口">
+      <button class="dock-btn" data-sheet="list" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="M12 21s-7.5-4.6-7.5-10A4.5 4.5 0 0 1 12 7.5 4.5 4.5 0 0 1 19.5 11c0 5.4-7.5 10-7.5 10Z"/>
         </svg>
         <span>收藏</span>
       </button>
-      <button class="tab" data-tab="add" type="button">
+      <button class="dock-btn" data-sheet="add" type="button">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
           <path d="M12 5v14M5 12h14"/>
         </svg>
         <span>添加</span>
       </button>
-      <button class="tab" data-tab="me" type="button">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="8.2" r="3.4"/>
-          <path d="M5.2 20c0-3.6 3.1-5.7 6.8-5.7s6.8 2.1 6.8 5.7"/>
+      <button class="dock-btn" data-sheet="me" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+          <path d="M4 7h16M4 12h16M4 17h16"/>
+          <circle cx="9" cy="7" r="2" fill="#fff"/>
+          <circle cx="15" cy="12" r="2" fill="#fff"/>
+          <circle cx="10" cy="17" r="2" fill="#fff"/>
         </svg>
-        <span>我的</span>
+        <span>设置</span>
       </button>
     </nav>
+
+    <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+
+    <section class="sheet" id="screen-list" hidden>
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <h2>收藏</h2>
+        <button class="sheet-close" data-close type="button" aria-label="关闭">✕</button>
+      </div>
+      <div class="sheet-content">
+        <div class="sheet-meta-row">
+          <span class="count-pill" id="shopCount">0 家</span>
+          <span class="sheet-tip">点卡片展开详情</span>
+        </div>
+        <div class="filter-row" id="filterRow">
+          <button class="filter active" data-filter="all" type="button">全部</button>
+          <button class="filter" data-filter="food" type="button">吃饭</button>
+          <button class="filter" data-filter="drink" type="button">饮品</button>
+        </div>
+        <div id="shopList"></div>
+        <div class="empty" id="listEmpty" hidden>
+          <strong>这里还是空的</strong>
+          <span>去添加一家喜欢的店吧</span>
+          <button class="btn primary" data-go="add" type="button">去添加</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="sheet" id="screen-add" hidden>
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <h2>添加</h2>
+        <div class="sheet-head-actions">
+          <button class="loc-pill" id="addLocBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 21s7-6.1 7-11a7 7 0 1 0-14 0c0 4.9 7 11 7 11Z"/>
+              <circle cx="12" cy="10" r="2.5"/>
+            </svg>
+            <span id="addLocText">定位中…</span>
+          </button>
+          <button class="sheet-close" data-close type="button" aria-label="关闭">✕</button>
+        </div>
+      </div>
+      <div class="sheet-content">
+        <div class="seg" id="typeSeg">
+          <div class="seg-thumb"></div>
+          <button class="seg-item active" data-type="food" type="button">吃饭</button>
+          <button class="seg-item" data-type="drink" type="button">饮品</button>
+        </div>
+
+        <div class="search-row">
+          <input id="placeSearch" type="search" placeholder="输入店名或关键词，如：牛肉面" autocomplete="off" enterkeyhint="search">
+          <button class="search-btn" id="placeSearchBtn" type="button">搜索</button>
+        </div>
+        <p class="hint">地点搜索由腾讯地图提供，需要允许定位；搜不到也可以在下方手动填写。</p>
+        <div id="placeResults"></div>
+
+        <div class="form-card">
+          <div class="form-title">店铺信息</div>
+          <input id="shopName" type="text" placeholder="店名（必填）" autocomplete="off">
+          <input id="shopAddress" type="text" placeholder="地址（可选）" autocomplete="off">
+          <input id="shopRating" type="number" min="0" max="5" step="0.1" placeholder="评分（可选，0-5）">
+          <input id="shopDishes" type="text" placeholder="招牌菜 / 推荐菜，用逗号分隔（可选）" autocomplete="off">
+          <div class="geo-note" id="geoNote" hidden>
+            <span id="geoNoteText"></span>
+            <span class="geo-actions">
+              <button id="navigateBtn" type="button">导航到这里</button>
+              <button id="clearGeoBtn" type="button">清除</button>
+            </span>
+          </div>
+        </div>
+
+        <div class="tag-panel">
+          <div class="tag-title">加标签（可选）</div>
+          <div class="tag-row" id="tagRow">
+            <button class="tag-chip" data-tag="常去" type="button">常去</button>
+            <button class="tag-chip" data-tag="招牌" type="button">招牌</button>
+            <button class="tag-chip" data-tag="辣" type="button">辣</button>
+            <button class="tag-chip" data-tag="清淡" type="button">清淡</button>
+            <button class="tag-chip" data-tag="性价比" type="button">性价比</button>
+            <button class="tag-chip" data-tag="适合约会" type="button">适合约会</button>
+          </div>
+        </div>
+
+        <button class="btn primary wide" id="addShopBtn" type="button">添加到收藏</button>
+      </div>
+    </section>
+
+    <section class="sheet" id="screen-me" hidden>
+      <div class="sheet-handle"></div>
+      <div class="sheet-head">
+        <h2>设置</h2>
+        <button class="sheet-close" data-close type="button" aria-label="关闭">✕</button>
+      </div>
+      <div class="sheet-content">
+        <div class="section-label">数据</div>
+        <div class="cell">
+          <div class="cell-main">
+            <div class="cell-title">本机存储</div>
+            <div class="cell-sub">数据保存在当前浏览器，换设备请用导出 / 导入</div>
+          </div>
+          <span class="status-dot" aria-label="正常"></span>
+        </div>
+
+        <div class="section-label">抽签规则</div>
+        <label class="cell">
+          <div class="cell-main">
+            <div class="cell-title">避免最近吃过</div>
+            <div class="cell-sub">最近 7 天内吃过的自动排除</div>
+          </div>
+          <span class="switch">
+            <input type="checkbox" id="setAvoid" checked>
+            <span></span>
+          </span>
+        </label>
+        <label class="cell">
+          <div class="cell-main">
+            <div class="cell-title">标签加权</div>
+            <div class="cell-sub">「常去 / 招牌」等偏好标签提高概率</div>
+          </div>
+          <span class="switch">
+            <input type="checkbox" id="setTag" checked>
+            <span></span>
+          </span>
+        </label>
+        <label class="cell">
+          <div class="cell-main">
+            <div class="cell-title">好评优先</div>
+            <div class="cell-sub">评分越高，抽中概率越大</div>
+          </div>
+          <span class="switch">
+            <input type="checkbox" id="setRating" checked>
+            <span></span>
+          </span>
+        </label>
+
+        <div class="section-label">历史</div>
+        <div id="historyList"></div>
+
+        <div class="section-label">更多</div>
+        <button class="cell cell-btn" id="exportBtn" type="button">
+          <span>导出数据</span><span class="chevron">›</span>
+        </button>
+        <button class="cell cell-btn" id="importBtn" type="button">
+          <span>导入数据</span><span class="chevron">›</span>
+        </button>
+        <input type="file" id="importFile" accept="application/json,.json" hidden>
+        <button class="cell cell-btn" id="demoBtn" type="button">
+          <span>载入示例数据</span><span class="chevron">›</span>
+        </button>
+        <button class="cell cell-btn danger" id="clearBtn" type="button">
+          <span>清空所有数据</span><span class="chevron">›</span>
+        </button>
+      </div>
+    </section>
+
+    <div class="picked-view" id="pickedView" hidden>
+      <div class="picked-card">
+        <div class="picked-check">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M5 12.5l4.5 4.5L19 7.5"/>
+          </svg>
+        </div>
+        <div class="picked-eyebrow">已记录 · 下次会避开</div>
+        <h2 class="picked-name" id="pickedName"></h2>
+        <p class="picked-address" id="pickedAddress"></p>
+        <div class="picked-dishes" id="pickedDishes"></div>
+        <div class="picked-actions">
+          <button class="btn primary" id="pickedNavigateBtn" type="button">导航出发</button>
+          <button class="btn ghost" id="pickedBackBtn" type="button">回到抽签</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="config.js"></script>
-  <script src="app.js?v=glass-orb"></script>
+  <script src="config.js?v=glass-orb"></script>
+  <script src="app.js?v=apple-deck"></script>
 </body>
 </html>

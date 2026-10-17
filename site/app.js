@@ -34,6 +34,7 @@ const state = {
   selectedTags: new Set(),
   spinning: false,
   result: null,
+  pickedShop: null,
   tickTimer: null,
   drawTimer: null
 };
@@ -169,20 +170,65 @@ function showToast(message) {
   showToast.timer = setTimeout(() => node.classList.remove('show'), 2200);
 }
 
-function switchScreen(tab) {
-  document.querySelectorAll('.screen').forEach((screen) => {
-    screen.classList.toggle('active', screen.id === 'screen-' + tab);
-  });
-  document.querySelectorAll('.tab').forEach((button) => {
-    button.classList.toggle('active', button.dataset.tab === tab);
+function renderDeck() {
+  const label = CATEGORY_LABEL[state.category];
+  const categoryShops = state.shops.filter((shop) => shop.type === state.category);
+  const eligible = getEligible();
+
+  if (el.deckBadge) el.deckBadge.textContent = label;
+  if (el.deckBack1) {
+    el.deckBack1.textContent = categoryShops[0] ? categoryShops[0].name : '还没有收藏';
+  }
+  if (el.deckBack2) {
+    el.deckBack2.textContent = categoryShops[1] ? categoryShops[1].name : '等你添加';
+  }
+  if (el.deckHint) {
+    el.deckHint.textContent = eligible.pool.length
+      ? '从 ' + eligible.pool.length + ' 家收藏里抽一张'
+      : (categoryShops.length ? '最近都吃过了，去添加新店' : '先添加几家收藏');
+  }
+}
+
+function openSheet(name) {
+  closeSheet();
+  const sheet = $('screen-' + name);
+  if (!sheet) return;
+
+  sheet.hidden = false;
+  el.sheetBackdrop.hidden = false;
+  document.body.classList.add('sheet-open');
+
+  requestAnimationFrame(() => {
+    sheet.classList.add('open');
+    el.sheetBackdrop.classList.add('open');
   });
 
-  if (tab === 'draw') updateDrawSub();
-  if (tab === 'list') renderList();
-  if (tab === 'me') {
+  if (name === 'list') renderList();
+  if (name === 'me') {
     renderHistory();
     syncSettingsUI();
   }
+  if (name === 'add') {
+    setTimeout(() => el.placeSearch.focus(), 360);
+  }
+}
+
+function closeSheet() {
+  document.querySelectorAll('.sheet.open').forEach((sheet) => {
+    sheet.classList.remove('open');
+    setTimeout(() => {
+      if (!sheet.classList.contains('open')) sheet.hidden = true;
+    }, 320);
+  });
+
+  if (el.sheetBackdrop) {
+    el.sheetBackdrop.classList.remove('open');
+    setTimeout(() => {
+      if (!document.querySelector('.sheet.open')) el.sheetBackdrop.hidden = true;
+    }, 320);
+  }
+
+  document.body.classList.remove('sheet-open');
 }
 
 function setCategory(category) {
@@ -196,6 +242,7 @@ function setCategory(category) {
   el.drawTitle.textContent = category === 'food' ? '今天吃什么？' : '今天喝什么？';
   state.result = null;
   el.resultCard.innerHTML = '';
+  $('screen-draw').classList.remove('has-result');
   el.ticker.textContent = '';
   updateDrawSub();
 }
@@ -265,10 +312,12 @@ function updateDrawSub() {
 
   el.drawSub.textContent = text;
   el.drawEmpty.hidden = total !== 0;
+  renderDeck();
 }
 
 function startDraw() {
   if (state.spinning) return;
+  $('screen-draw').classList.remove('has-result');
 
   const eligible = getEligible();
   if (!eligible.pool.length) {
@@ -282,7 +331,7 @@ function startDraw() {
   state.spinning = true;
   state.result = null;
   el.resultCard.innerHTML = '';
-  el.wheel.classList.add('spinning');
+  el.deck.classList.add('shuffling');
   el.ticker.textContent = eligible.pool[0].name;
 
   let index = 0;
@@ -294,14 +343,16 @@ function startDraw() {
   state.drawTimer = setTimeout(() => {
     clearInterval(state.tickTimer);
     state.spinning = false;
-    el.wheel.classList.remove('spinning');
+    el.deck.classList.remove('shuffling');
     el.ticker.textContent = '';
     state.result = picked;
     renderResult(picked);
+    if (navigator.vibrate) navigator.vibrate(15);
   }, 1250);
 }
 
 function renderResult(shop) {
+  $('screen-draw').classList.add('has-result');
   const distance = distanceText(shop.distance);
   const tags = (shop.tags || [])
     .map((tag) => '<span class="tag">' + escapeHtml(tag) + '</span>')
@@ -315,6 +366,7 @@ function renderResult(shop) {
 
   el.resultCard.innerHTML = `
     <div class="result-card">
+      <div class="r-reveal">抽中了</div>
       <div class="r-top">
         <span class="cat-badge">${CATEGORY_LABEL[shop.type]}</span>
         <span class="r-dist">${distance}</span>
@@ -354,10 +406,41 @@ function pickedCurrent() {
 
   state.result = null;
   el.resultCard.innerHTML = '';
+  $('screen-draw').classList.remove('has-result');
   renderList();
   updateDrawSub();
   renderHistory();
-  showToast('已记录，下次会避开');
+  showPickedView(shop);
+  if (navigator.vibrate) navigator.vibrate([20, 30, 20]);
+}
+
+function showPickedView(shop) {
+  state.pickedShop = shop;
+  const canNavigate = shop.lat != null && shop.lng != null;
+
+  el.pickedView.hidden = false;
+  el.pickedView.classList.toggle('drink', shop.type === 'drink');
+  el.pickedName.textContent = shop.name;
+  el.pickedAddress.textContent = shop.address || '地址待补充';
+  el.pickedDishes.innerHTML = (shop.dishes && shop.dishes.length)
+    ? shop.dishes.map((dish) => '<span class="dish-chip">' + escapeHtml(dish) + '</span>').join('')
+    : '<span class="dish-empty">还没有记录招牌菜</span>';
+  el.pickedNavigateBtn.disabled = !canNavigate;
+  el.pickedNavigateBtn.textContent = canNavigate ? '导航出发' : '暂无坐标';
+
+  document.body.classList.add('picked-open');
+  requestAnimationFrame(() => el.pickedView.classList.add('open'));
+}
+
+function closePickedView() {
+  el.pickedView.classList.remove('open');
+  document.body.classList.remove('picked-open');
+  setTimeout(() => {
+    el.pickedView.hidden = true;
+    state.pickedShop = null;
+    $('screen-draw').classList.remove('has-result');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, 280);
 }
 
 function shopCardHtml(shop) {
@@ -465,6 +548,7 @@ function deleteShop(id) {
   if (state.result && state.result.id === id) {
     state.result = null;
     el.resultCard.innerHTML = '';
+    $('screen-draw').classList.remove('has-result');
   }
   saveShops();
   renderList();
@@ -878,7 +962,7 @@ function addShop() {
   setFilter('all');
   updateDrawSub();
   showToast('已添加到收藏');
-  switchScreen('list');
+  openSheet('list');
 }
 
 function exportData() {
@@ -984,6 +1068,7 @@ function clearAll() {
   saveSettings();
   state.result = null;
   el.resultCard.innerHTML = '';
+  $('screen-draw').classList.remove('has-result');
   resetAddForm();
   setFilter('all');
   updateDrawSub();
@@ -993,12 +1078,24 @@ function clearAll() {
 }
 
 function bindEvents() {
-  document.querySelectorAll('.tab').forEach((button) => {
-    button.addEventListener('click', () => switchScreen(button.dataset.tab));
+  document.querySelectorAll('.dock-btn').forEach((button) => {
+    button.addEventListener('click', () => openSheet(button.dataset.sheet));
   });
 
   document.querySelectorAll('[data-go]').forEach((button) => {
-    button.addEventListener('click', () => switchScreen(button.dataset.go));
+    button.addEventListener('click', () => openSheet(button.dataset.go));
+  });
+
+  document.querySelectorAll('[data-close]').forEach((button) => {
+    button.addEventListener('click', closeSheet);
+  });
+
+  el.sheetBackdrop.addEventListener('click', closeSheet);
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      closeSheet();
+      closePickedView();
+    }
   });
 
   document.querySelectorAll('#catSeg .seg-item').forEach((button) => {
@@ -1013,7 +1110,7 @@ function bindEvents() {
     button.addEventListener('click', () => setFilter(button.dataset.filter));
   });
 
-  el.wheel.addEventListener('click', startDraw);
+  el.deck.addEventListener('click', startDraw);
   el.locBtn.addEventListener('click', locate);
   el.addLocBtn.addEventListener('click', locate);
   el.placeSearchBtn.addEventListener('click', searchPlaces);
@@ -1110,6 +1207,20 @@ function bindEvents() {
   });
 
   el.navigateBtn.addEventListener('click', navigateToSelected);
+
+  el.pickedNavigateBtn.addEventListener('click', () => {
+    const shop = state.pickedShop;
+    if (!shop) return;
+    openTencentNavigation(
+      { lat: shop.lat, lng: shop.lng },
+      shop.name,
+      shop.address
+    );
+  });
+  el.pickedBackBtn.addEventListener('click', closePickedView);
+  el.pickedView.addEventListener('click', (event) => {
+    if (event.target === el.pickedView) closePickedView();
+  });
 }
 
 function init() {
@@ -1120,7 +1231,12 @@ function init() {
   el.drawTitle = $('drawTitle');
   el.drawSub = $('drawSub');
   el.drawEmpty = $('drawEmpty');
-  el.wheel = $('wheel');
+  el.deck = $('deck');
+  el.deckBadge = $('deckBadge');
+  el.deckHint = $('deckHint');
+  el.deckBack1 = $('deckBack1');
+  el.deckBack2 = $('deckBack2');
+  el.sheetBackdrop = $('sheetBackdrop');
   el.ticker = $('ticker');
   el.resultCard = $('resultCard');
   el.shopCount = $('shopCount');
@@ -1136,6 +1252,12 @@ function init() {
   el.geoNote = $('geoNote');
   el.geoNoteText = $('geoNoteText');
   el.navigateBtn = $('navigateBtn');
+  el.pickedView = $('pickedView');
+  el.pickedName = $('pickedName');
+  el.pickedAddress = $('pickedAddress');
+  el.pickedDishes = $('pickedDishes');
+  el.pickedNavigateBtn = $('pickedNavigateBtn');
+  el.pickedBackBtn = $('pickedBackBtn');
   el.clearGeoBtn = $('clearGeoBtn');
   el.tagRow = $('tagRow');
   el.addShopBtn = $('addShopBtn');
@@ -1172,8 +1294,17 @@ function init() {
   renderHistory();
   syncSettingsUI();
 
+  if (params.get('testDraw') === '1') {
+    setTimeout(() => {
+      startDraw();
+      if (params.get('testPick') === '1') {
+        setTimeout(pickedCurrent, 1600);
+      }
+    }, 600);
+  }
+
   const tab = params.get('tab');
-  switchScreen(['draw', 'list', 'add', 'me'].indexOf(tab) > -1 ? tab : 'draw');
+  if (['list', 'add', 'me'].indexOf(tab) > -1) openSheet(tab);
   locate();
 }
 
