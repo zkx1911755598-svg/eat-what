@@ -1,12 +1,12 @@
 :root {
-  --bg: #f5f5f7;
+  --bg: #fbf7ef;
   --card: #ffffff;
-  --ink: #1d1d1f;
-  --sub: #6e6e73;
-  --line: #e8e8ed;
+  --ink: #2a211a;
+  --sub: #6f6258;
+  --line: rgba(90, 65, 40, 0.12);
   --green: #34c759;
   --amber: #f5a623;
-  --eat: #0f766e;
+  --eat: #c2610a;
   --drink: #0071e3;
 }
 
@@ -197,7 +197,7 @@ button {
   border: none;
   border-radius: 50%;
   background: var(--accent);
-  background: conic-gradient(from 0deg, #0f766e, #99f6e4, #0f766e);
+  background: conic-gradient(from 0deg, #c2610a, #ffd8a8, #c2610a);
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.16);
 }
 
@@ -999,10 +999,10 @@ button {
 
 /* Liquid glass theme */
 :root {
-  --sub: #5f6368;
-  --line: rgba(60, 60, 67, 0.12);
-  --glass: rgba(255, 255, 255, 0.5);
-  --glass-strong: rgba(255, 255, 255, 0.72);
+  --sub: #6f6258;
+  --line: rgba(90, 65, 40, 0.12);
+  --glass: rgba(255, 252, 246, 0.5);
+  --glass-strong: rgba(255, 252, 246, 0.72);
   --glass-border: rgba(255, 255, 255, 0.68);
   --glass-shadow: 0 16px 40px rgba(31, 38, 68, 0.1);
   --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(255, 255, 255, 0.2);
@@ -1012,10 +1012,10 @@ body {
   position: relative;
   overflow-x: hidden;
   background:
-    radial-gradient(900px 620px at 8% -10%, rgba(214, 236, 255, 0.9) 0%, transparent 62%),
-    radial-gradient(760px 620px at 100% 8%, rgba(226, 220, 255, 0.9) 0%, transparent 60%),
-    radial-gradient(800px 700px at 55% 108%, rgba(205, 243, 226, 0.9) 0%, transparent 58%),
-    linear-gradient(160deg, #f4f5f9 0%, #f3f5fa 48%, #eff7f4 100%);
+    radial-gradient(900px 620px at 8% -10%, rgba(255, 226, 186, 0.9) 0%, transparent 62%),
+    radial-gradient(760px 620px at 100% 8%, rgba(198, 226, 255, 0.85) 0%, transparent 60%),
+    radial-gradient(800px 700px at 55% 108%, rgba(205, 243, 226, 0.85) 0%, transparent 58%),
+    linear-gradient(160deg, #fbf7ef 0%, #fdf3e7 48%, #eef6f1 100%);
   background-attachment: fixed;
 }
 
@@ -1036,7 +1036,7 @@ body::before {
   left: -90px;
   width: 360px;
   height: 360px;
-  background: radial-gradient(circle, rgba(167, 243, 208, 0.8), transparent 68%);
+  background: radial-gradient(circle, rgba(255, 205, 150, 0.8), transparent 68%);
   animation: liquidFloatA 18s ease-in-out infinite alternate;
 }
 
@@ -1087,7 +1087,7 @@ body::after {
 .search-row,
 .quick-panel,
 .history-item {
-  background: linear-gradient(145deg, rgba(255, 255, 255, 0.68), rgba(255, 255, 255, 0.38));
+  background: linear-gradient(145deg, rgba(255, 252, 246, 0.72), rgba(255, 249, 240, 0.4));
   border: 1px solid var(--glass-border);
   box-shadow: var(--glass-shadow), var(--glass-inset);
   -webkit-backdrop-filter: blur(24px) saturate(170%);
@@ -1112,7 +1112,7 @@ body::after {
 .tag-chip,
 .dish-chip,
 .btn.ghost {
-  background: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 252, 246, 0.48);
   border: 1px solid rgba(255, 255, 255, 0.62);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.82), 0 4px 14px rgba(31, 38, 68, 0.06);
   -webkit-backdrop-filter: blur(14px) saturate(160%);
@@ -1194,7 +1194,7 @@ body::after {
 }
 
 .form-card input {
-  background: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 252, 246, 0.48);
   border: 1px solid rgba(255, 255, 255, 0.62);
   box-shadow: inset 0 1px 2px rgba(31, 38, 68, 0.04);
   -webkit-backdrop-filter: blur(14px) saturate(160%);
