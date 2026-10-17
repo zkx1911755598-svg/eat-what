@@ -38,6 +38,7 @@ const state = {
 };
 
 const el = {};
+let tencentMapPromise = null;
 
 function $(id) {
   return document.getElementById(id);
@@ -514,6 +515,47 @@ function updateGeoNote() {
   el.geoNote.hidden = false;
 }
 
+function loadTencentMap() {
+  if (window.TMap && window.TMap.service) {
+    document.documentElement.dataset.tencentSdk = 'ok';
+    return Promise.resolve();
+  }
+  if (tencentMapPromise) return tencentMapPromise;
+
+  const config = window.APP_CONFIG || {};
+  if (!config.tencentMapKey) {
+    document.documentElement.dataset.tencentSdk = 'missing';
+    return Promise.reject(new Error('TENCENT_KEY_MISSING'));
+  }
+
+  document.documentElement.dataset.tencentSdk = 'loading';
+  tencentMapPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://map.qq.com/api/gljs?v=1.exp&key='
+      + encodeURIComponent(config.tencentMapKey)
+      + '&libraries=service';
+    script.async = true;
+    script.onload = () => {
+      if (window.TMap && window.TMap.service) {
+        document.documentElement.dataset.tencentSdk = 'ok';
+        resolve();
+      } else {
+        document.documentElement.dataset.tencentSdk = 'error';
+        tencentMapPromise = null;
+        reject(new Error('TENCENT_LOAD_FAILED'));
+      }
+    };
+    script.onerror = () => {
+      document.documentElement.dataset.tencentSdk = 'error';
+      tencentMapPromise = null;
+      reject(new Error('TENCENT_LOAD_FAILED'));
+    };
+    document.head.appendChild(script);
+  });
+
+  return tencentMapPromise;
+}
+
 async function searchPlaces() {
   if (el.placeSearchBtn.disabled) return;
   const keyword = el.placeSearch.value.trim();
@@ -523,29 +565,55 @@ async function searchPlaces() {
     return;
   }
 
+  const config = window.APP_CONFIG || {};
+  if (!config.tencentMapKey) {
+    showToast('请先配置腾讯地图 Key');
+    return;
+  }
+  if (!state.currentPosition) {
+    showToast('请先允许定位，再搜索附近店铺');
+    locate();
+    return;
+  }
+
   el.placeSearchBtn.disabled = true;
   el.placeSearchBtn.textContent = '搜索中';
-  el.placeResults.innerHTML = '<div class="hint">正在搜索地点…</div>';
+  el.placeResults.innerHTML = '<div class="hint">正在搜索附近地点…</div>';
 
   try {
-    const url = 'https://nominatim.openstreetmap.org/search'
-      + '?format=jsonv2&addressdetails=1&limit=8&accept-language=zh-CN&q='
-      + encodeURIComponent(keyword);
-    const response = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!response.ok) throw new Error('search failed');
+    await loadTencentMap();
+    const search = new TMap.service.Search({ pageSize: 20 });
+    const center = new TMap.LatLng(state.currentPosition.lat, state.currentPosition.lng);
+    const result = await search.searchNearby({
+      keyword,
+      center,
+      radius: 1000,
+      autoExtend: true,
+      orderby: '_distance'
+    });
 
-    const data = await response.json();
-    state.searchResults = (data || []).map((item) => ({
-      name: item.name || String(item.display_name || '').split(',')[0],
-      address: item.display_name || '',
-      lat: parseFloat(item.lat),
-      lng: parseFloat(item.lon)
-    })).filter((item) => item.name);
+    const data = (result && result.data) || [];
+    state.searchResults = data.map((item) => {
+      const location = item.location || {};
+      const lat = Number(location.lat);
+      const lng = Number(location.lng);
+      let distance = Number(item._distance);
+      if (!distance && lat && lng) {
+        distance = haversine(state.currentPosition, { lat, lng });
+      }
+      return {
+        name: item.title || item.name || '未命名地点',
+        address: item.address || '',
+        lat,
+        lng,
+        distance
+      };
+    }).filter((item) => item.name && item.lat && item.lng);
 
     renderSearchResults();
   } catch (err) {
     state.searchResults = [];
-    el.placeResults.innerHTML = '<div class="hint">搜索服务暂不可用，请在下方手动填写店铺信息。</div>';
+    el.placeResults.innerHTML = '<div class="hint">腾讯地图搜索失败，请检查 Key、域名白名单和定位权限，或手动填写下方信息。</div>';
   } finally {
     el.placeSearchBtn.disabled = false;
     el.placeSearchBtn.textContent = '搜索';
@@ -562,7 +630,7 @@ function renderSearchResults() {
     <div class="place-result">
       <div class="place-info">
         <div class="place-name">${escapeHtml(item.name)}</div>
-        <div class="place-addr">${escapeHtml(item.address)}</div>
+        <div class="place-addr">${escapeHtml(item.address)}${item.distance ? ' · ' + distanceText(item.distance) : ''}</div>
       </div>
       <button class="choose-btn" data-index="${index}" type="button">选择</button>
     </div>
@@ -876,6 +944,10 @@ function init() {
 
   loadState();
   bindEvents();
+
+  if (window.APP_CONFIG && window.APP_CONFIG.tencentMapKey) {
+    loadTencentMap().catch(() => {});
+  }
 
   const params = new URLSearchParams(window.location.search);
   if (params.get('demo') === '1' && !state.shops.length) {
