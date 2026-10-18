@@ -254,6 +254,8 @@ function setAddType(type) {
   });
   $('typeSeg').classList.toggle('drink', type === 'drink');
   $('screen-add').classList.toggle('drink', type === 'drink');
+  state.searchResults = [];
+  el.placeResults.innerHTML = '';
 }
 
 function getEligible() {
@@ -594,29 +596,33 @@ function locate() {
 
   if (!navigator.geolocation) {
     setLocText('不支持定位');
-    return;
+    return Promise.reject(new Error('不支持定位'));
   }
 
-  navigator.geolocation.getCurrentPosition(
-    (position) => {
-      state.currentPosition = wgs84ToGcj02(
-        position.coords.latitude,
-        position.coords.longitude
-      );
-      setLocText('已定位');
-      refreshDistances();
-      updateGeoNote();
-    },
-    () => {
-      setLocText('未定位');
-      updateGeoNote();
-    },
-    {
-      enableHighAccuracy: false,
-      timeout: 8000,
-      maximumAge: 600000
-    }
-  );
+  return new Promise((resolve, reject) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        state.currentPosition = wgs84ToGcj02(
+          position.coords.latitude,
+          position.coords.longitude
+        );
+        setLocText('已定位');
+        refreshDistances();
+        updateGeoNote();
+        resolve(state.currentPosition);
+      },
+      () => {
+        setLocText('未定位');
+        updateGeoNote();
+        reject(new Error('定位失败'));
+      },
+      {
+        enableHighAccuracy: false,
+        timeout: 8000,
+        maximumAge: 600000
+      }
+    );
+  });
 }
 
 function refreshDistances() {
@@ -822,7 +828,9 @@ async function tencentSearch(keyword, center) {
       address: item.address || '',
       lat,
       lng,
-      distance: lat && lng ? haversine(center, { lat, lng }) : null
+      distance: lat && lng ? haversine(center, { lat, lng }) : null,
+      rating: null,
+      cost: null
     };
   }).filter((item) => item.name && item.lat && item.lng)
     .sort((a, b) => {
@@ -896,7 +904,13 @@ function amapSearch(keyword, center) {
             address: poi.address || '',
             lat,
             lng,
-            distance
+            distance,
+            rating: poi.biz_ext && poi.biz_ext.rating
+              ? Number(poi.biz_ext.rating)
+              : null,
+            cost: poi.biz_ext && poi.biz_ext.cost
+              ? Number(poi.biz_ext.cost)
+              : null
           };
         }).filter((poi) => poi.name && poi.lat && poi.lng);
 
@@ -931,7 +945,7 @@ async function searchPlaces() {
   }
   if (!state.currentPosition) {
     showToast('请先允许定位，再搜索附近店铺');
-    locate();
+    locate().catch(() => {});
     return;
   }
 
@@ -971,6 +985,116 @@ function renderSearchResults() {
       <button class="choose-btn" data-index="${index}" type="button">选择</button>
     </div>
   `).join('');
+}
+
+async function recommendNearby() {
+  const config = window.APP_CONFIG || {};
+  if (!config.amapKey && !config.tencentMapKey) {
+    showToast('请先配置地图 Key');
+    return;
+  }
+
+  if (!state.currentPosition) {
+    try {
+      await locate();
+    } catch (err) {
+      showToast('定位失败，请允许位置权限后重试');
+      return;
+    }
+  }
+
+  const keyword = state.addType === 'drink' ? '饮品' : '美食';
+  el.recommendBtn.disabled = true;
+  el.recommendLabel.textContent = '正在找…';
+  el.placeResults.innerHTML = '<div class="hint">正在按评分和距离找附近的店…</div>';
+
+  try {
+    const data = config.amapKey
+      ? await amapSearch(keyword, state.currentPosition)
+      : await tencentSearch(keyword, state.currentPosition);
+    const savedNames = new Set(state.shops.map((shop) => shop.name));
+    const list = data
+      .filter((item) => !savedNames.has(item.name))
+      .sort((a, b) => {
+        const ar = Number(a.rating) || 0;
+        const br = Number(b.rating) || 0;
+        if (br !== ar) return br - ar;
+        const ad = a.distance == null ? Infinity : a.distance;
+        const bd = b.distance == null ? Infinity : b.distance;
+        return ad - bd;
+      })
+      .slice(0, 12);
+
+    state.searchResults = list;
+    renderRecommendations();
+  } catch (err) {
+    const message = err && err.message ? err.message : '附近推荐失败';
+    el.placeResults.innerHTML = '<div class="hint">'
+      + escapeHtml(message) + '，也可以手动填写。</div>';
+  } finally {
+    el.recommendBtn.disabled = false;
+    el.recommendLabel.textContent = '附近推荐';
+  }
+}
+
+function renderRecommendations() {
+  if (!state.searchResults.length) {
+    el.placeResults.innerHTML = '<div class="hint">附近没有新的店了，换个类型或手动搜索。</div>';
+    return;
+  }
+
+  el.placeResults.innerHTML = state.searchResults.map((item, index) => `
+    <div class="place-result recommend">
+      <div class="place-info">
+        <div class="place-name">${escapeHtml(item.name)}</div>
+        <div class="place-addr">${escapeHtml(item.address || '')}${item.distance ? ' · ' + distanceText(item.distance) : ''}</div>
+        <div class="place-meta">
+          ${item.rating ? '★ ' + Number(item.rating).toFixed(1) : '暂无评分'}
+          ${item.cost ? '<span class="cost"> · 人均 ¥' + item.cost + '</span>' : ''}
+        </div>
+      </div>
+      <button class="choose-btn" data-recommend-index="${index}" type="button">加入</button>
+    </div>
+  `).join('');
+}
+
+async function addRecommended(index) {
+  const item = state.searchResults[index];
+  if (!item) return;
+
+  if (state.shops.some((shop) => shop.name === item.name)) {
+    showToast('这家已经收藏过了');
+    return;
+  }
+
+  state.shops.push(normalizeShop({
+    id: uid(),
+    name: item.name,
+    type: state.addType,
+    address: item.address || '',
+    lat: item.lat,
+    lng: item.lng,
+    distance: item.distance,
+    rating: item.rating == null ? null : item.rating,
+    tags: ['推荐'],
+    dishes: [],
+    note: '',
+    pinned: false,
+    lastEatenAt: null,
+    createdAt: Date.now()
+  }));
+
+  saveShops();
+  updateDrawSub();
+  renderList();
+  showToast('已加入收藏');
+
+  const button = el.placeResults.querySelector('[data-recommend-index="' + index + '"]');
+  if (button) {
+    button.textContent = '已加入';
+    button.disabled = true;
+    button.classList.add('added');
+  }
 }
 
 function selectPlace(index) {
@@ -1193,14 +1317,21 @@ function bindEvents() {
   });
 
   el.deck.addEventListener('click', startDraw);
-  el.locBtn.addEventListener('click', locate);
-  el.addLocBtn.addEventListener('click', locate);
+  el.locBtn.addEventListener('click', () => locate().catch(() => {}));
+  el.addLocBtn.addEventListener('click', () => locate().catch(() => {}));
   el.placeSearchBtn.addEventListener('click', searchPlaces);
+  el.recommendBtn.addEventListener('click', recommendNearby);
   el.placeSearch.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') searchPlaces();
   });
 
   el.placeResults.addEventListener('click', (event) => {
+    const recommendButton = event.target.closest('[data-recommend-index]');
+    if (recommendButton) {
+      addRecommended(Number(recommendButton.dataset.recommendIndex));
+      return;
+    }
+
     const button = event.target.closest('.choose-btn');
     if (!button) return;
     selectPlace(Number(button.dataset.index));
@@ -1327,6 +1458,8 @@ function init() {
   el.placeSearch = $('placeSearch');
   el.placeSearchBtn = $('placeSearchBtn');
   el.placeResults = $('placeResults');
+  el.recommendBtn = $('recommendBtn');
+  el.recommendLabel = $('recommendLabel');
   el.providerHint = $('providerHint');
   el.shopName = $('shopName');
   el.shopAddress = $('shopAddress');
@@ -1399,7 +1532,7 @@ function init() {
 
   const tab = params.get('tab');
   if (['list', 'add', 'me'].indexOf(tab) > -1) openSheet(tab);
-  locate();
+  locate().catch(() => {});
 }
 
 document.addEventListener('DOMContentLoaded', init);

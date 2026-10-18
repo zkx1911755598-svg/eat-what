@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#fbf7ef">
   <meta name="description" content="收藏喜欢的店，吃饭或饮品随机抽签。">
   <title>今天吃什么 · 美食抽签</title>
-  <link rel="stylesheet" href="styles.css?v=apple-deck">
+  <link rel="stylesheet" href="styles.css?v=amap3">
   <link rel="manifest" href="manifest.json">
 </head>
 <body>
@@ -145,6 +145,16 @@
           <button class="search-btn" id="placeSearchBtn" type="button">搜索</button>
         </div>
         <p class="hint" id="providerHint">地点搜索需要允许定位；搜不到也可以在下方手动填写。</p>
+        <div class="recommend-row">
+          <button class="recommend-btn" id="recommendBtn" type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8L12 3Z"/>
+              <path d="M18.5 14.5l.7 2 2 .7-2 .7-.7 2-.7-2-2-.7 2-.7.7-2Z"/>
+            </svg>
+            <span id="recommendLabel">附近推荐</span>
+          </button>
+          <span class="recommend-tip">按评分和距离挑几家</span>
+        </div>
         <div id="placeResults"></div>
 
         <div class="form-card">
@@ -266,7 +276,7 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="config.js?v=amap2"></script>
-  <script src="app.js?v=amap2"></script>
+  <script src="config.js?v=amap3"></script>
+  <script src="app.js?v=amap3"></script>
 </body>
 </html>
