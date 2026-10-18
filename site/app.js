@@ -649,16 +649,15 @@ function updateGeoNote() {
   el.geoNote.hidden = false;
 }
 
-function openTencentNavigation(location, name, address) {
+function openAmapNavigation(location, name, address) {
   if (!location || location.lat == null || location.lng == null) {
     showToast('这个地点没有坐标，暂时无法导航');
     return;
   }
 
-  const url = 'https://apis.map.qq.com/uri/v1/routeplan?type=drive'
-    + '&to=' + encodeURIComponent(name || '目的地')
-    + '&tocoord=' + location.lat + ',' + location.lng
-    + '&referer=eat-what';
+  const to = location.lng + ',' + location.lat + ',' + encodeURIComponent(name || '目的地');
+  const url = 'https://uri.amap.com/navigation?to=' + to
+    + '&mode=car&src=eat-what&coordinate=gaode&callnative=1';
   const win = window.open(url, '_blank', 'noopener');
   if (!win) window.location.href = url;
 }
@@ -669,7 +668,7 @@ function navigateToSelected() {
     return;
   }
 
-  openTencentNavigation(
+  openAmapNavigation(
     state.pendingLocation,
     el.shopName.value.trim() || '目的地',
     el.shopAddress.value.trim()
@@ -833,6 +832,89 @@ async function tencentSearch(keyword, center) {
     });
 }
 
+let amapPromise = null;
+
+function loadAmap() {
+  if (window.AMap && window.AMap.PlaceSearch) return Promise.resolve();
+  if (amapPromise) return amapPromise;
+
+  const config = window.APP_CONFIG || {};
+  if (!config.amapKey) {
+    return Promise.reject(new Error('请先配置高德 JS API Key'));
+  }
+
+  if (config.amapSecurityCode) {
+    window._AMapSecurityConfig = {
+      securityJsCode: config.amapSecurityCode
+    };
+  }
+
+  amapPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = 'https://webapi.amap.com/maps?v=2.0&key='
+      + encodeURIComponent(config.amapKey)
+      + '&plugin=AMap.PlaceSearch';
+    script.async = true;
+    script.onload = () => {
+      if (window.AMap && window.AMap.PlaceSearch) {
+        resolve();
+      } else {
+        amapPromise = null;
+        reject(new Error('高德 JS API 加载失败'));
+      }
+    };
+    script.onerror = () => {
+      amapPromise = null;
+      reject(new Error('高德 JS API 加载失败'));
+    };
+    document.head.appendChild(script);
+  });
+
+  return amapPromise;
+}
+
+function amapSearch(keyword, center) {
+  return loadAmap().then(() => new Promise((resolve, reject) => {
+    const search = new AMap.PlaceSearch({
+      pageSize: 20,
+      pageIndex: 1,
+      extensions: 'all'
+    });
+
+    search.searchNearBy(keyword, [center.lng, center.lat], 3000, (status, result) => {
+      if (status === 'complete' && result && result.poiList) {
+        const pois = (result.poiList.pois || []).map((poi) => {
+          const loc = poi.location || {};
+          const lat = Number(loc.lat);
+          const lng = Number(loc.lng);
+          let distance = Number(poi.distance);
+          if (!distance && lat && lng) {
+            distance = haversine(center, { lat, lng });
+          }
+          return {
+            name: poi.name || '未命名地点',
+            address: poi.address || '',
+            lat,
+            lng,
+            distance
+          };
+        }).filter((poi) => poi.name && poi.lat && poi.lng);
+
+        pois.sort((a, b) => {
+          const left = a.distance == null ? Infinity : a.distance;
+          const right = b.distance == null ? Infinity : b.distance;
+          return left - right;
+        });
+        resolve(pois);
+      } else if (status === 'no_data') {
+        resolve([]);
+      } else {
+        reject(new Error(result && result.info ? result.info : '高德搜索失败'));
+      }
+    });
+  }));
+}
+
 async function searchPlaces() {
   if (el.placeSearchBtn.disabled) return;
   const keyword = el.placeSearch.value.trim();
@@ -843,8 +925,8 @@ async function searchPlaces() {
   }
 
   const config = window.APP_CONFIG || {};
-  if (!config.tencentMapKey) {
-    showToast('请先配置腾讯地图 Key');
+  if (!config.amapKey && !config.tencentMapKey) {
+    showToast('请先配置地图 Key');
     return;
   }
   if (!state.currentPosition) {
@@ -858,7 +940,9 @@ async function searchPlaces() {
   el.placeResults.innerHTML = '<div class="hint">正在搜索附近地点…</div>';
 
   try {
-    const data = await tencentSearch(keyword, state.currentPosition);
+    const data = config.amapKey
+      ? await amapSearch(keyword, state.currentPosition)
+      : await tencentSearch(keyword, state.currentPosition);
     state.searchResults = data;
     renderSearchResults();
   } catch (err) {
@@ -1143,7 +1227,7 @@ function bindEvents() {
     if (button.dataset.resultAction === 'again') startDraw();
     if (button.dataset.resultAction === 'picked') pickedCurrent();
     if (button.dataset.resultAction === 'navigate' && state.result) {
-      openTencentNavigation(
+      openAmapNavigation(
         { lat: state.result.lat, lng: state.result.lng },
         state.result.name,
         state.result.address
@@ -1160,7 +1244,7 @@ function bindEvents() {
       if (button.dataset.action === 'navigate') {
         const shop = state.shops.find((item) => item.id === button.dataset.id);
         if (shop) {
-          openTencentNavigation(
+          openAmapNavigation(
             { lat: shop.lat, lng: shop.lng },
             shop.name,
             shop.address
@@ -1209,7 +1293,7 @@ function bindEvents() {
   el.pickedNavigateBtn.addEventListener('click', () => {
     const shop = state.pickedShop;
     if (!shop) return;
-    openTencentNavigation(
+    openAmapNavigation(
       { lat: shop.lat, lng: shop.lng },
       shop.name,
       shop.address
@@ -1243,6 +1327,7 @@ function init() {
   el.placeSearch = $('placeSearch');
   el.placeSearchBtn = $('placeSearchBtn');
   el.placeResults = $('placeResults');
+  el.providerHint = $('providerHint');
   el.shopName = $('shopName');
   el.shopAddress = $('shopAddress');
   el.shopRating = $('shopRating');
@@ -1273,13 +1358,24 @@ function init() {
   loadState();
   bindEvents();
 
+  const mapConfig = window.APP_CONFIG || {};
+  if (el.providerHint) {
+    const provider = mapConfig.amapKey
+      ? '高德地图'
+      : (mapConfig.tencentMapKey ? '腾讯地图' : '地图服务');
+    el.providerHint.textContent = '地点搜索由' + provider
+      + '提供，需要允许定位；搜不到也可以在下方手动填写。';
+  }
+
   const params = new URLSearchParams(window.location.search);
   if (params.get('demo') === '1' && !state.shops.length) {
     loadDemoData();
   }
 
-  if (params.get('testSearch') === '1' && window.APP_CONFIG.tencentMapKey) {
-    tencentSearch('牛肉面', { lat: 22.5405, lng: 113.9545 }).then((data) => {
+  const testConfig = window.APP_CONFIG || {};
+  if (params.get('testSearch') === '1' && (testConfig.amapKey || testConfig.tencentMapKey)) {
+    const testFn = testConfig.amapKey ? amapSearch : tencentSearch;
+    testFn('牛肉面', { lat: 22.5405, lng: 113.9545 }).then((data) => {
       document.documentElement.dataset.tencentSearch = 'ok:' + data.length;
     }).catch((err) => {
       document.documentElement.dataset.tencentSearch = 'error:'
